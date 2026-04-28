@@ -1,7 +1,5 @@
 # Nail Gallery — Frontend React + Vite + Tailwind
 
-Projeto refeito com base no visual enviado e nos requisitos do trabalho.
-
 ## Como rodar
 
 ```bash
