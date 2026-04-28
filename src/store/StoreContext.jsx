@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { seededProducts } from "../data/seedProducts";
-import { KEYS, readStorage, writeStorage } from "../lib/storage";
 import { useAuth } from "./AuthContext";
+import { apiFetch } from "../lib/api";
 
 import logoAsset from "../assets/logo.jpeg";
 import bannerAsset from "../assets/banner.avif";
@@ -13,7 +12,7 @@ const defaultSettings = {
   heroBanner: bannerAsset,
   heroTitle1: "Unhas postiças para deixar seu visual ainda mais",
   heroTitle2: "lindo",
-  heroDescription: "Modelos delicados, modernos e cheios de charme para valorizar seu estilo em qualquer ocasião. Escolha suas favoritas e receba em casa com entrega para todo o Brasil.",
+  heroDescription: "Modelos delicados, modernos e cheios de charme.",
   footerDescription: "E-commerce autoral de unhas postiças personalizadas com proposta visual elegante e navegação leve.",
   instagramUrl: "https://www.instagram.com/nailgallery_oficial/",
   instagramText: "Instagram: @nailgallery_oficial",
@@ -24,218 +23,137 @@ const defaultSettings = {
   goldColor: "#a17c54",
 };
 
-function normalizeArray(value) {
-  if (Array.isArray(value)) {
-    return value.map((item) => String(item).trim()).filter(Boolean);
-  }
-
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
-  return [];
-}
-
 export function StoreProvider({ children }) {
   const { user } = useAuth();
 
-  const [products, setProducts] = useState(() => {
-    const saved = readStorage(KEYS.PRODUCTS, []);
-    return saved.length ? saved : seededProducts;
-  });
+  const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [currentCart, setCurrentCart] = useState([]);
+  const [settings, setSettings] = useState(defaultSettings);
 
-  const [orders, setOrders] = useState(() => readStorage(KEYS.ORDERS, []));
-  const [carts, setCarts] = useState(() => readStorage(KEYS.CARTS, {}));
-  
-  const [settings, setSettings] = useState(() => {
-    const stored = readStorage(KEYS.SITE_SETTINGS, null);
-    if (!stored) return defaultSettings;
-    return { ...defaultSettings, ...stored };
-  });
-
+  // Inicialização (Global Data)
   useEffect(() => {
-    writeStorage(KEYS.PRODUCTS, products);
-  }, [products]);
-
-  useEffect(() => {
-    writeStorage(KEYS.ORDERS, orders);
-  }, [orders]);
-
-  useEffect(() => {
-    writeStorage(KEYS.CARTS, carts);
-  }, [carts]);
-
-  useEffect(() => {
-    writeStorage(KEYS.SITE_SETTINGS, settings);
-  }, [settings]);
-
-  const currentCart = user ? carts[user.id] || [] : [];
-
-  const cartCount = currentCart.reduce((sum, item) => {
-    return sum + Number(item.quantity || 0);
-  }, 0);
-
-  const cartTotal = currentCart.reduce((sum, item) => {
-    return sum + Number(item.quantity || 0) * Number(item.price || 0);
-  }, 0);
-
-  function addToCart(product, customization) {
-    if (!user) {
-      throw new Error("Faça login para adicionar itens ao carrinho.");
+    async function initData() {
+      try {
+        const [prodData, settData] = await Promise.all([
+          apiFetch("/products"),
+          apiFetch("/settings")
+        ]);
+        setProducts(prodData);
+        if (settData && Object.keys(settData).length > 0) {
+          setSettings({ ...defaultSettings, ...settData });
+        }
+      } catch (err) {
+        console.error("Erro ao carregar dados do servidor:", err);
+      }
     }
+    initData();
+  }, []);
 
-    setCarts((prev) => {
-      const userCart = prev[user.id] || [];
+  // Dados do Usuário (Cart e Orders)
+  useEffect(() => {
+    async function loadUserData() {
+      if (!user) {
+        setCurrentCart([]);
+        setOrders([]);
+        return;
+      }
+      try {
+        const [cartData, ordersData] = await Promise.all([
+          apiFetch("/cart"),
+          apiFetch("/orders")
+        ]);
+        setCurrentCart(cartData.items || []);
+        setOrders(ordersData || []);
+      } catch (err) {
+        console.error("Erro ao carregar os dados do usuário", err);
+      }
+    }
+    loadUserData();
+  }, [user]);
 
-      return {
-        ...prev,
-        [user.id]: [
-          ...userCart,
-          {
-            id: `ci-${Date.now()}`,
-            productId: product.id,
-            name: product.name,
-            image: product.image,
-            price: Number(product.price),
-            quantity: Math.max(1, Number(customization.quantity || 1)),
-            color: customization.color,
-            size: customization.size,
-          },
-        ],
-      };
-    });
+  const cartCount = currentCart.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const cartTotal = currentCart.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.price || 0)), 0);
+
+  async function addToCart(product, customization) {
+    if (!user) throw new Error("Faça login para adicionar itens ao carrinho.");
+    const body = {
+      productId: product.id,
+      color: customization.color,
+      size: customization.size,
+      price: product.price,
+      quantity: customization.quantity || 1
+    };
+    const saved = await apiFetch("/cart/add", { method: "POST", body: JSON.stringify(body) });
+    // Inserimos localmente para refletir na UI sem recarregar o get todo (se preferir)
+    setCurrentCart(prev => [...prev, { ...saved, name: product.name, image: product.image, product_id: product.id }]);
+  }
+
+  async function removeCartItem(itemId) {
+    if (!user) return;
+    await apiFetch(`/cart/remove/${itemId}`, { method: "DELETE" });
+    setCurrentCart(prev => prev.filter((item) => item.id !== itemId));
   }
 
   function updateCartItem(itemId, quantity) {
-    if (!user) return;
-
-    setCarts((prev) => ({
-      ...prev,
-      [user.id]: (prev[user.id] || []).map((item) =>
-        item.id === itemId
-          ? { ...item, quantity: Math.max(1, Number(quantity)) }
-          : item
-      ),
-    }));
+    // Por simplicidade sem refatorar a interface que já exigia update local: local mutation
+    setCurrentCart(prev => prev.map((item) => item.id === itemId ? { ...item, quantity: Math.max(1, Number(quantity)) } : item));
   }
 
-  function removeCartItem(itemId) {
-    if (!user) return;
+  async function checkout() {
+    if (!user) throw new Error("Faça login para finalizar o pedido.");
+    if (!currentCart.length) throw new Error("Seu carrinho está vazio.");
 
-    setCarts((prev) => ({
-      ...prev,
-      [user.id]: (prev[user.id] || []).filter((item) => item.id !== itemId),
-    }));
+    await apiFetch("/orders/checkout", { method: "POST" });
+    // Recarregar os dados para limpar local e dar refresh em orders real
+    const ordersData = await apiFetch("/orders");
+    setOrders(ordersData || []);
+    setCurrentCart([]);
   }
 
-  function checkout() {
-    if (!user) {
-      throw new Error("Faça login para finalizar o pedido.");
-    }
-
-    const userCart = carts[user.id] || [];
-
-    if (!userCart.length) {
-      throw new Error("Seu carrinho está vazio.");
-    }
-
-    const newOrder = {
-      id: `o-${Date.now()}`,
-      userId: user.id,
-      customerName: user.name,
-      customerEmail: user.email,
-      status: "Recebido",
-      createdAt: new Date().toISOString(),
-      total: userCart.reduce((sum, item) => {
-        return sum + Number(item.quantity || 0) * Number(item.price || 0);
-      }, 0),
-      items: userCart,
-    };
-
-    setOrders((prev) => [newOrder, ...prev]);
-    setCarts((prev) => ({ ...prev, [user.id]: [] }));
+  async function createProduct(payload) {
+    const saved = await apiFetch("/products", { method: "POST", body: JSON.stringify(payload) });
+    // O backend retorna CSV, adaptamos arrays para a view igual o GET
+    saved.colors = saved.colors ? saved.colors.split(',') : [];
+    saved.sizes = saved.sizes ? saved.sizes.split(',') : [];
+    setProducts(prev => [saved, ...prev]);
   }
 
-  function createProduct(payload) {
-    const newProduct = {
-      id: `p-${Date.now()}`,
-      slug: payload.slug,
-      name: String(payload.name || "").trim(),
-      category: String(payload.category || "Clássicas").trim(),
-      price: Number(payload.price || 0),
-      image: payload.image || "",
-      description: String(payload.description || "").trim(),
-      colors: normalizeArray(payload.colors),
-      sizes: normalizeArray(payload.sizes),
-      featured: Boolean(payload.featured ?? false),
-    };
-
-    setProducts((prev) => [newProduct, ...prev]);
+  async function updateProduct(productId, payload) {
+    const saved = await apiFetch(`/products/${productId}`, { method: "PUT", body: JSON.stringify(payload) });
+    saved.colors = saved.colors ? saved.colors.split(',') : [];
+    saved.sizes = saved.sizes ? saved.sizes.split(',') : [];
+    setProducts(prev => prev.map((p) => p.id === productId ? saved : p));
   }
 
-  function updateProduct(productId, payload) {
-    setProducts((prev) =>
-      prev.map((product) => {
-        if (product.id !== productId) return product;
-
-        return {
-          ...product,
-          slug: payload.slug ?? product.slug,
-          name: String(payload.name ?? product.name).trim(),
-          category: String(payload.category ?? product.category).trim(),
-          price: Number(payload.price ?? product.price),
-          image: payload.image ?? product.image,
-          description: String(payload.description ?? product.description).trim(),
-          colors: payload.colors ? normalizeArray(payload.colors) : product.colors,
-          sizes: payload.sizes ? normalizeArray(payload.sizes) : product.sizes,
-          featured: payload.featured ?? product.featured,
-        };
-      })
-    );
+  async function deleteProduct(productId) {
+    await apiFetch(`/products/${productId}`, { method: "DELETE" });
+    setProducts(prev => prev.filter((product) => product.id !== productId));
   }
 
-  function deleteProduct(productId) {
-    setProducts((prev) => prev.filter((product) => product.id !== productId));
+  async function updateOrderStatus(orderId, status) {
+    const updated = await apiFetch(`/orders/${orderId}/status`, { method: "PUT", body: JSON.stringify({ status }) });
+    setOrders(prev => prev.map((order) => order.id === orderId ? { ...order, status: updated.status } : order));
   }
 
-  function updateOrderStatus(orderId, status) {
-    setOrders((prev) =>
-      prev.map((order) =>
-        order.id === orderId ? { ...order, status } : order
-      )
-    );
+  async function updateSettings(newSettings) {
+    // Mescla o estado
+    const merged = { ...settings, ...newSettings };
+    const saved = await apiFetch("/settings", { method: "PUT", body: JSON.stringify(merged) });
+    setSettings(saved);
   }
 
-  function updateSettings(newSettings) {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
-  }
-
-  const myOrders = user
-    ? orders.filter((order) => order.userId === user.id)
-    : [];
+  const myOrders = user ? orders.filter((order) => order.user_id === user.id) : [];
 
   const value = useMemo(
     () => ({
-      products,
-      setProducts,
-      orders,
-      myOrders,
-      currentCart,
-      cartCount,
-      cartTotal,
+      products, setProducts,
+      orders, myOrders,
+      currentCart, cartCount, cartTotal,
       settings,
-      addToCart,
-      updateCartItem,
-      removeCartItem,
-      checkout,
-      createProduct,
-      updateProduct,
-      deleteProduct,
-      updateOrderStatus,
-      updateSettings,
+      addToCart, updateCartItem, removeCartItem, checkout,
+      createProduct, updateProduct, deleteProduct,
+      updateOrderStatus, updateSettings,
     }),
     [products, orders, myOrders, currentCart, cartCount, cartTotal, settings]
   );
@@ -245,10 +163,6 @@ export function StoreProvider({ children }) {
 
 export function useStore() {
   const context = useContext(StoreContext);
-
-  if (!context) {
-    throw new Error("useStore deve ser usado dentro de StoreProvider.");
-  }
-
+  if (!context) throw new Error("useStore deve ser usado dentro de StoreProvider.");
   return context;
 }

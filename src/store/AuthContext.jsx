@@ -1,88 +1,65 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { KEYS, readStorage, writeStorage } from "../lib/storage";
+import { apiFetch } from "../lib/api";
 
 const AuthContext = createContext(null);
 
-const adminSeed = {
-  id: "u-admin",
-  name: "Admin Nail Gallery",
-  email: "admin@nailgallery.com",
-  password: "admin123",
-  role: "admin",
-};
-
 export function AuthProvider({ children }) {
-  const [users, setUsers] = useState(() => {
-    const saved = readStorage(KEYS.USERS, []);
-    return saved.length ? saved : [adminSeed];
-  });
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const [session, setSession] = useState(() => readStorage(KEYS.SESSION, null));
-
+  // Re-autenticar se houver token na inicialização
   useEffect(() => {
-    writeStorage(KEYS.USERS, users);
-  }, [users]);
-
-  useEffect(() => {
-    writeStorage(KEYS.SESSION, session);
-  }, [session]);
-
-  function register(payload) {
-    const email = payload.email.trim().toLowerCase();
-
-    if (users.some((user) => user.email === email)) {
-      throw new Error("Já existe uma conta com esse e-mail.");
+    async function loadUser() {
+      const token = localStorage.getItem("nail-gallery-token");
+      if (token) {
+        try {
+          const data = await apiFetch("/auth/me");
+          setSession(data.user);
+        } catch (error) {
+          localStorage.removeItem("nail-gallery-token");
+        }
+      }
+      setLoading(false);
     }
+    loadUser();
+  }, []);
 
-    const newUser = {
-      id: `u-${Date.now()}`,
-      name: payload.name.trim(),
-      email,
-      password: payload.password,
-      role: "customer",
-    };
-
-    const nextUsers = [...users, newUser];
-    setUsers(nextUsers);
-    setSession({
-      id: newUser.id,
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
+  async function register(payload) {
+    // Isso cria o cliente. Como ele precisa logar, podemos fazer um auto-login ou forçá-lo
+    await apiFetch("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
+    // Efetuamos login direto para conforto
+    await login({ email: payload.email, password: payload.password });
   }
 
-  function login(payload) {
-    const email = payload.email.trim().toLowerCase();
-    const found = users.find(
-      (user) => user.email === email && user.password === payload.password
-    );
-
-    if (!found) {
-      throw new Error("E-mail ou senha inválidos.");
-    }
-
-    setSession({
-      id: found.id,
-      name: found.name,
-      email: found.email,
-      role: found.role,
+  async function login(payload) {
+    const data = await apiFetch("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
+    
+    // Salva token e sessão
+    localStorage.setItem("nail-gallery-token", data.token);
+    setSession(data.user);
   }
 
   function logout() {
+    localStorage.removeItem("nail-gallery-token");
     setSession(null);
+    window.location.href = "/login";
   }
 
   const value = useMemo(
     () => ({
       user: session,
-      users,
+      loading,
       register,
       login,
       logout,
     }),
-    [session, users]
+    [session, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
