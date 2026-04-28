@@ -53,6 +53,9 @@ export default function Header() {
           </Link>
           {user ? (
             <>
+              <Link to="/perfil" className="hidden md:inline hover:text-black">
+                Perfil
+              </Link>
               <Link to="/pedidos" className="hidden md:inline hover:text-black">
                 Pedidos
               </Link>

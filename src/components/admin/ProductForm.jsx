@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { slugify } from "../../lib/storage";
 import { useStore } from "../../store/StoreContext";
-import { toast } from "sonner"; // Utilizando o framewor de toast recém adicionado
+import { toast } from "sonner";
+import { uploadToCloudinary } from "../../lib/cloudinary";
 
 const initialForm = {
   name: "",
@@ -17,6 +18,7 @@ export default function ProductForm({ editingProduct, onClearEdit }) {
   const { products, createProduct, updateProduct } = useStore();
   const [form, setForm] = useState(initialForm);
   const [imagePreview, setImagePreview] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
 
   const fallbackImage = useMemo(() => products[0]?.image || "", [products]);
 
@@ -48,17 +50,24 @@ export default function ProductForm({ editingProduct, onClearEdit }) {
     if (field === "image") setImagePreview(value);
   }
 
-  function handleImageUpload(event) {
+  async function handleImageUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      setForm((prev) => ({ ...prev, image: result }));
-      setImagePreview(result);
-    };
-    reader.readAsDataURL(file);
+    setIsUploading(true);
+    const toastId = toast.loading("Enviando imagem para o Cloudinary...");
+
+    try {
+      const url = await uploadToCloudinary(file);
+      setForm((prev) => ({ ...prev, image: url }));
+      setImagePreview(url);
+      toast.success("Imagem enviada com sucesso!", { id: toastId });
+    } catch (error) {
+      console.error("Erro no upload:", error);
+      toast.error("Erro ao enviar imagem: " + error.message, { id: toastId });
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   function handleSubmit(event) {

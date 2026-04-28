@@ -10,6 +10,20 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS addresses (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    zip_code VARCHAR(10),
+    street VARCHAR(255),
+    number VARCHAR(20),
+    complement VARCHAR(255),
+    neighborhood VARCHAR(100),
+    city VARCHAR(100),
+    state VARCHAR(2),
+    is_default BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,

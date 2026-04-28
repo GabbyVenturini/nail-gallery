@@ -9,6 +9,8 @@ import ProductForm from "../components/admin/ProductForm";
 import ProductList from "../components/admin/ProductList";
 import OrderList from "../components/admin/OrderList";
 import SiteSettingsForm from "../components/admin/SiteSettingsForm";
+import AdminUserForm from "../components/admin/AdminUserForm";
+import { Shield } from "lucide-react";
 
 export default function Admin() {
   const { user } = useAuth();
@@ -63,6 +65,12 @@ export default function Admin() {
             >
               <Palette size={18} /> Aparência (CMS)
             </button>
+            <button
+               onClick={() => setActiveTab("usuarios")}
+               className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl text-[12px] font-bold uppercase tracking-[0.1em] transition-all duration-300 ${activeTab === "usuarios" ? "bg-primary text-white shadow-md translate-x-2" : "text-neutral-600 hover:bg-white hover:shadow-sm"}`}
+            >
+              <Shield size={18} /> Equipe / Admins
+            </button>
           </aside>
 
           {/* Area Central (Work Area) */}
@@ -86,6 +94,12 @@ export default function Admin() {
             {activeTab === "config" && (
               <div className="max-w-4xl animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <SiteSettingsForm />
+              </div>
+            )}
+
+            {activeTab === "usuarios" && (
+              <div className="max-w-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <AdminUserForm />
               </div>
             )}
           </main>

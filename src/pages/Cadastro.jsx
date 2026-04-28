@@ -14,12 +14,12 @@ export default function Cadastro() {
   });
   const [error, setError] = useState("");
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setError("");
 
     try {
-      register(form);
+      await register(form);
       navigate("/");
     } catch (err) {
       setError(err.message);

@@ -7,6 +7,11 @@ const router = express.Router();
 router.post("/checkout", authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
+    const { shippingAddress, paymentMethod } = req.body;
+
+    if (!shippingAddress || !paymentMethod) {
+      return res.status(400).json({ error: "Endereço e forma de pagamento são obrigatórios." });
+    }
 
     const cart = await query("SELECT id FROM carts WHERE user_id = $1", [userId]);
     if (cart.rows.length === 0) return res.status(400).json({ error: "Carrinho vazio." });
@@ -17,9 +22,10 @@ router.post("/checkout", authenticate, async (req, res) => {
 
     const total = items.rows.reduce((acc, item) => acc + Number(item.price) * item.quantity, 0);
 
+    // Salva o pedido já como "Pago" e status "Pago" conforme solicitado
     const orderResult = await query(
-      "INSERT INTO orders (user_id, total, status) VALUES ($1, $2, 'Recebido') RETURNING id",
-      [userId, total]
+      "INSERT INTO orders (user_id, total, status, shipping_address, payment_method, payment_status) VALUES ($1, $2, 'Pago', $3, $4, 'Pago') RETURNING id",
+      [userId, total, JSON.stringify(shippingAddress), paymentMethod]
     );
     const orderId = orderResult.rows[0].id;
 
@@ -35,6 +41,7 @@ router.post("/checkout", authenticate, async (req, res) => {
 
     res.status(201).json({ message: "Pedido criado com sucesso", orderId });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: "Erro no checkout." });
   }
 });

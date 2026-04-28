@@ -12,6 +12,7 @@ import Cart from "./pages/Cart";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
 import Pedidos from "./pages/Pedidos";
+import Profile from "./pages/Profile";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import { useStore } from "./store/StoreContext";
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/cadastro" element={<Cadastro />} />
           <Route path="/pedidos" element={<Pedidos />} />
+          <Route path="/perfil" element={<Profile />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

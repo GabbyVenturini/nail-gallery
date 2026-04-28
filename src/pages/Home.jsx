@@ -13,7 +13,7 @@ const fadeUpVariant = {
 
 export default function Home() {
   const { products, settings } = useStore();
-  const featured = products.filter((item) => item.featured).slice(0, 3);
+  const featured = products.slice(0, 3);
 
   return (
     <motion.div initial="hidden" animate="visible" exit={{ opacity: 0 }}>

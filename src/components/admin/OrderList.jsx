@@ -42,8 +42,8 @@ export default function OrderList() {
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-neutral-900">{order.customerName}</h3>
-                  <span className="font-mono text-[10px] text-neutral-400">#{order.id.split("-")[1]}</span>
+                  <h3 className="font-bold text-neutral-900">{order.customerName || "Cliente"}</h3>
+                  <span className="font-mono text-[10px] text-neutral-400">#{order.id}</span>
                 </div>
                 <p className="text-sm font-medium text-neutral-500">
                   {order.customerEmail} · <span className="text-primary font-bold">{currency(order.total)}</span>

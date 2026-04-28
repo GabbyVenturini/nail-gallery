@@ -10,12 +10,12 @@ export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setError("");
 
     try {
-      login(form);
+      await login(form);
       navigate("/");
     } catch (err) {
       setError(err.message);

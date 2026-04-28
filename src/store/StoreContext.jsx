@@ -100,15 +100,31 @@ export function StoreProvider({ children }) {
     setCurrentCart(prev => prev.map((item) => item.id === itemId ? { ...item, quantity: Math.max(1, Number(quantity)) } : item));
   }
 
-  async function checkout() {
+  async function checkout(payload) {
     if (!user) throw new Error("Faça login para finalizar o pedido.");
     if (!currentCart.length) throw new Error("Seu carrinho está vazio.");
 
-    await apiFetch("/orders/checkout", { method: "POST" });
+    // payload deve conter { shippingAddress, paymentMethod }
+    await apiFetch("/orders/checkout", { 
+      method: "POST", 
+      body: JSON.stringify(payload) 
+    });
+    
     // Recarregar os dados para limpar local e dar refresh em orders real
     const ordersData = await apiFetch("/orders");
     setOrders(ordersData || []);
     setCurrentCart([]);
+  }
+
+  async function updateProfile(data) {
+    if (!user) return;
+    const updated = await apiFetch("/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(data)
+    });
+    // Opcional: atualizar o usuário no AuthContext se necessário, 
+    // mas aqui o backend já responde o novo perfil.
+    return updated;
   }
 
   async function createProduct(payload) {
@@ -137,13 +153,15 @@ export function StoreProvider({ children }) {
   }
 
   async function updateSettings(newSettings) {
-    // Mescla o estado
+    // Mescla o estado local com os novos dados antes de enviar
     const merged = { ...settings, ...newSettings };
+    // Lança o erro para o componente caller exibir o toast correto
     const saved = await apiFetch("/settings", { method: "PUT", body: JSON.stringify(merged) });
     setSettings(saved);
   }
 
-  const myOrders = user ? orders.filter((order) => order.user_id === user.id) : [];
+  // Usa == (coerção) para evitar mismatch de tipos: user_id do DB é number, user.id do JWT pode ser string
+  const myOrders = user ? orders.filter((order) => order.user_id == user.id) : [];
 
   const value = useMemo(
     () => ({
@@ -153,9 +171,9 @@ export function StoreProvider({ children }) {
       settings,
       addToCart, updateCartItem, removeCartItem, checkout,
       createProduct, updateProduct, deleteProduct,
-      updateOrderStatus, updateSettings,
+      updateOrderStatus, updateSettings, updateProfile
     }),
-    [products, orders, myOrders, currentCart, cartCount, cartTotal, settings]
+    [products, orders, myOrders, currentCart, cartCount, cartTotal, settings, user]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

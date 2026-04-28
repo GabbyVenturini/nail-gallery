@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:3000/api";
+const API_URL = "http://localhost:3001/api";
 
 export async function apiFetch(endpoint, options = {}) {
   const token = localStorage.getItem("nail-gallery-token");
